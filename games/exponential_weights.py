@@ -69,15 +69,19 @@ class ExponentialWeights:
         Compute expected utility of playing action_index against opponent distribution.
         
         Args:
-            payoff_matrix: 2x2 payoff matrix for the player
+            payoff_matrix: 2x2 payoff matrix where:
+                          - First index: opponent's action
+                          - Second index: player's action
             opponent_probs: Probability vector [p(theta1), p(theta2)] for opponent
             action_index: Action to evaluate (0 or 1)
             
         Returns:
             Expected utility of playing action_index
         """
-        return (payoff_matrix[action_index, 0] * opponent_probs[0] + 
-                payoff_matrix[action_index, 1] * opponent_probs[1])
+        # Payoff matrix is indexed as [opponent_action][player_action]
+        # So for player's action_index, we look at that column across all opponent actions
+        return (payoff_matrix[0, action_index] * opponent_probs[0] + 
+                payoff_matrix[1, action_index] * opponent_probs[1])
     
     def ew_update(self, 
                  current_probs: np.ndarray, 
@@ -160,7 +164,7 @@ class ExponentialWeights:
             
             # Synchronous update
             new_p1 = self.ew_update(p1, p2, payoff_matrix, eta)
-            new_p2 = self.ew_update(p2, p1, payoff_matrix.T, eta)
+            new_p2 = self.ew_update(p2, p1, payoff_matrix, eta)
             p1, p2 = new_p1, new_p2
         
         return history
@@ -176,7 +180,7 @@ class ExponentialWeights:
                               p2_init: Optional[np.ndarray] = None,
                               save_path: Optional[str] = None) -> None:
         """
-        Plot simulation results showing probabilities and delta trajectories.
+        Plot simulation results showing probabilities only.
         
         Args:
             history: Simulation history from run_simulation
@@ -192,51 +196,40 @@ class ExponentialWeights:
         p1_theta2 = np.array(history['p1'])[:, 1]  # Probability of theta2 for player 1
         p2_theta1 = np.array(history['p2'])[:, 0]  # Probability of theta1 for player 2
         p2_theta2 = np.array(history['p2'])[:, 1]  # Probability of theta2 for player 2
-        delta1 = np.array(history['delta1'])
-        delta2 = np.array(history['delta2'])
         
-        fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+        fig, ax = plt.subplots(1, 1, figsize=(12, 6))
         
         # Plot probabilities with different colors for players and markers for actions
         # Player 1: blue, Player 2: red
-        # θ₁: circles, θ₂: squares
+        # θ₁: circles, θ₂: squares (with dotted line)
         markevery = max(1, len(rounds)//20)
-        axes[0].plot(rounds, p1_theta1, label='Player 1 P(θ₁)', linewidth=2, color='blue', 
-                    marker='o', markersize=3, markevery=markevery, alpha=0.8)
-        axes[0].plot(rounds, p2_theta1, label='Player 2 P(θ₁)', linewidth=2, color='red',
-                    marker='o', markersize=3, markevery=markevery, alpha=0.8)
-        axes[0].plot(rounds, p1_theta2, label='Player 1 P(θ₂)', linewidth=2, color='blue',
-                    marker='s', markersize=3, markevery=markevery, alpha=0.8)
-        axes[0].plot(rounds, p2_theta2, label='Player 2 P(θ₂)', linewidth=2, color='red',
-                    marker='s', markersize=3, markevery=markevery, alpha=0.8)
-        axes[0].set_ylim(-0.02, 1.02)
-        axes[0].set_ylabel('Probability', fontsize=12)
         
-        # Create title with initialization details and delta values
+        # Plot θ₁ (action 1) with solid lines
+        ax.plot(rounds, p1_theta1, label='Player 1 P(θ₁)', linewidth=2, color='blue', 
+                marker='o', markersize=3, markevery=markevery, alpha=0.8)
+        ax.plot(rounds, p2_theta1, label='Player 2 P(θ₁)', linewidth=2, color='red',
+                marker='o', markersize=3, markevery=markevery, alpha=0.8)
+        
+        # Plot θ₂ (action 2) with dotted lines
+        ax.plot(rounds, p1_theta2, label='Player 1 P(θ₂)', linewidth=2, color='blue',
+                marker='s', markersize=3, markevery=markevery, alpha=0.8, 
+                linestyle=':')
+        ax.plot(rounds, p2_theta2, label='Player 2 P(θ₂)', linewidth=2, color='red',
+                marker='s', markersize=3, markevery=markevery, alpha=0.8,
+                linestyle=':')
+        ax.set_ylim(-0.02, 1.02)
+        ax.set_ylabel('Probability', fontsize=12)
+        ax.set_xlabel('Round', fontsize=12)
+        
+        # Create title with initialization details
         title = f'{case_name} — {init_name} — η={eta} — ε₁={eps1:.3f}, ε₂={eps2:.3f}'
         if p1_init is not None and p2_init is not None:
             init_details = f' | Init: P1({p1_init[0]:.2f},{p1_init[1]:.2f}), P2({p2_init[0]:.2f},{p2_init[1]:.2f})'
             title += init_details
-        
-        # Add initial delta values
-        if p1_init is not None and p2_init is not None:
-            initial_delta1 = p1_init[0] * eps1 + p1_init[1] * eps2
-            initial_delta2 = p2_init[0] * eps1 + p2_init[1] * eps2
-            delta_details = f' | Δ₁₀={initial_delta1:.3f}, Δ₂₀={initial_delta2:.3f}'
-            title += delta_details
             
-        axes[0].set_title(title, fontsize=12)
-        axes[0].legend(loc='upper right', fontsize=10)
-        axes[0].grid(True, alpha=0.3)
-        
-        # Plot delta trajectories
-        axes[1].plot(rounds, delta1, label='Δ₁(t)', linewidth=2)
-        axes[1].plot(rounds, delta2, label='Δ₂(t)', linewidth=2, linestyle='--')
-        axes[1].axhline(0, color='k', linewidth=0.5, alpha=0.7)
-        axes[1].set_ylabel('Δ(t)', fontsize=12)
-        axes[1].set_xlabel('Round', fontsize=12)
-        axes[1].legend(loc='upper right', fontsize=10)
-        axes[1].grid(True, alpha=0.3)
+        ax.set_title(title, fontsize=12)
+        ax.legend(loc='upper right', fontsize=10)
+        ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
         
@@ -258,7 +251,7 @@ class InitializationStrategies:
     @staticmethod
     def init_identical() -> Tuple[np.ndarray, np.ndarray]:
         """Identical initialization for both players."""
-        p = np.array([0.5, 0.5])
+        p = np.array([0.7, 0.3])
         return p.copy(), p.copy()
     
     @staticmethod
@@ -381,7 +374,9 @@ class SimulationRunner:
             # Determine save path
             save_path = None
             if save_plots:
-                filename = f"{case_name}_{init_name.replace(' ', '_').replace('(', '').replace(')', '')}.png"
+                # Include eta in filename for higher step size runs
+                eta_suffix = f"_eta{eta}" if eta != 1.0 else ""
+                filename = f"{case_name}_{init_name.replace(' ', '_').replace('(', '').replace(')', '')}{eta_suffix}.png"
                 save_path = os.path.join(self.output_dir, filename)
             
             # Plot results
@@ -401,12 +396,12 @@ class SimulationRunner:
         cases = self.game_cases.get_all_cases()
         
         for case_name, payoff_matrix in cases.items():
-            # For mixed cases, also try smaller eta
+            # For mixed cases, also try larger eta
             if case_name in ["(-,+)", "(+,-)"]:
                 print(f"\n{'='*80}")
-                print(f"Running {case_name} with smaller eta for mixed-NE regime")
+                print(f"Running {case_name} with larger eta for mixed-NE regime")
                 print(f"{'='*80}")
-                self.run_case_simulation(case_name, payoff_matrix, eta=0.5, T=T)
+                self.run_case_simulation(case_name, payoff_matrix, eta=8.2, T=T)
             
             # Run with standard eta
             self.run_case_simulation(case_name, payoff_matrix, eta=eta, T=T)
