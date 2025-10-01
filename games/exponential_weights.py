@@ -221,11 +221,15 @@ class ExponentialWeights:
         ax.set_ylabel('Probability', fontsize=12)
         ax.set_xlabel('Round', fontsize=12)
         
-        # Create title with initialization details
+        # Create title with initialization details and initial delta values
         title = f'{case_name} — {init_name} — η={eta} — ε₁={eps1:.3f}, ε₂={eps2:.3f}'
         if p1_init is not None and p2_init is not None:
             init_details = f' | Init: P1({p1_init[0]:.2f},{p1_init[1]:.2f}), P2({p2_init[0]:.2f},{p2_init[1]:.2f})'
             title += init_details
+            initial_delta1 = p1_init[0] * eps1 + p1_init[1] * eps2
+            initial_delta2 = p2_init[0] * eps1 + p2_init[1] * eps2
+            delta_details = f' | Δ₁₀={initial_delta1:.3f}, Δ₂₀={initial_delta2:.3f}'
+            title += delta_details
             
         ax.set_title(title, fontsize=12)
         ax.legend(loc='upper right', fontsize=10)
